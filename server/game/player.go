@@ -8,6 +8,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var writeWait = time.Second
+var readWait = time.Second
+
 type UserInfo struct {
 	Id     string
 	Name   string
@@ -15,13 +18,13 @@ type UserInfo struct {
 }
 
 type Player struct {
-	info UserInfo
+	info *UserInfo
 	conn *websocket.Conn
 	recv chan Msg
 	send chan Msg
 }
 
-func NewPlayer(conn *websocket.Conn, info UserInfo) *Player {
+func NewPlayer(conn *websocket.Conn, info *UserInfo) *Player {
 	r := make(chan Msg, 1)
 	s := make(chan Msg, 1)
 	p := &Player{conn: conn, recv: r, send: s, info: info}
@@ -42,10 +45,11 @@ func (p *Player) onMsg() {
 		}
 		msg := Msg{}
 		_ = json.Unmarshal(data, &msg)
-		timer := time.NewTimer(time.Second)
+		timer := time.NewTimer(readWait)
 		select {
 		case p.recv <- msg:
-			//
+			//do nothing
+			log.Println("recv:", string(data))
 		case <-timer.C:
 			break
 		}
@@ -53,5 +57,15 @@ func (p *Player) onMsg() {
 }
 
 func (p *Player) Send(m Msg) error {
+	if err := p.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+		return err
+	}
 	return p.conn.WriteJSON(m)
+}
+
+// Echo is for testing only
+func (p *Player) Echo(c <-chan Msg) {
+	for msg := range c {
+		_ = p.Send(msg)
+	}
 }

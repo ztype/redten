@@ -7,23 +7,17 @@ import (
 	"path/filepath"
 
 	"github.com/gorilla/mux"
-	uuid "github.com/satori/go.uuid"
 	"github.com/ztype/redten/server/game"
 )
 
 var fAddr = flag.String("addr", ":1010", "listen addr")
 var fDir = flag.String("dir", "./static/html", "html file dir")
 
-func newId() string {
-	uid, _ := uuid.NewV4()
-	return uid.String()
-}
-
 func home(dir string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "" {
 			if c, err := r.Cookie("id"); err != nil {
-				uid := newId()
+				uid := game.NewUid()
 				http.SetCookie(w, &http.Cookie{Name: "id", Value: uid})
 				log.Println("new id:", uid)
 			} else {

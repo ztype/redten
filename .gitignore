@@ -1,1 +1,3 @@
 *.exe
+/server/server
+/ddz_game
