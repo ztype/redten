@@ -2,14 +2,13 @@ package game
 
 import (
 	"encoding/json"
-	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 var writeWait = time.Second
-var readWait = time.Second
 
 type UserInfo struct {
 	Id     string
@@ -19,25 +18,34 @@ type UserInfo struct {
 
 type Player struct {
 	info          *UserInfo
+	lock          sync.Mutex
 	conn          *websocket.Conn
-	recv          chan Msg
 	closecallback []func(string)
+	msgcallback   []func(*Player, *Msg)
+	//
+	Cards []*Card
 }
 
 func NewPlayer(conn *websocket.Conn, info *UserInfo) *Player {
-	r := make(chan Msg, 1)
-	p := &Player{conn: conn, recv: r, info: info}
+	p := &Player{conn: conn, info: info}
+	p.Cards = make([]*Card, 0)
+	p.lock = sync.Mutex{}
 	conn.SetCloseHandler(p.onClose)
 	go p.onMsg()
 	return p
+}
+
+func (p *Player) Renew(conn *websocket.Conn, cards []*Card) {
+	p.conn = conn
+	p.Cards = cards
 }
 
 func (p *Player) Id() string {
 	return p.info.Id
 }
 
-func (p *Player) OnMsg() <-chan Msg {
-	return p.recv
+func (p *Player) OnMsg(f func(p *Player, m *Msg)) {
+	p.msgcallback = append(p.msgcallback, f)
 }
 
 func (p *Player) OnClose(f func(string)) {
@@ -45,8 +53,7 @@ func (p *Player) OnClose(f func(string)) {
 }
 
 func (p *Player) onClose(code int, text string) error {
-	close(p.recv)
-	log.Println("close:", p.conn.RemoteAddr().String(), "exit")
+	//log.Println("close:", p.conn.RemoteAddr().String(), "exit")
 	for _, callback := range p.closecallback {
 		callback(p.Id())
 	}
@@ -57,33 +64,20 @@ func (p *Player) onMsg() {
 	for {
 		_, data, err := p.conn.ReadMessage()
 		if err != nil {
-			log.Println(err)
 			return
 		}
 		msg := Msg{}
 		_ = json.Unmarshal(data, &msg)
-		timer := time.NewTimer(readWait)
-		select {
-		case p.recv <- msg:
-			//do nothing
-			log.Println("recv:", string(data))
-		case <-timer.C:
-			break
+		for _, callback := range p.msgcallback {
+			callback(p, &msg)
 		}
 	}
 }
 
-func (p *Player) Send(m Msg) error {
+func (p *Player) Send(m *Msg) error {
 	if err := p.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
 		return err
 	}
-	log.Println("send:", m)
+	//log.Println("send:", m)
 	return p.conn.WriteJSON(m)
-}
-
-// Echo is for testing only
-func (p *Player) Echo(c <-chan Msg) {
-	for msg := range c {
-		_ = p.Send(msg)
-	}
 }

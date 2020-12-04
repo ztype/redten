@@ -112,9 +112,10 @@ func IsChain(cards []*Card) bool {
 		if cards[i].Value == "2" {
 			return false
 		}
-		if i > 0 && cardvalue[cards[i].Value] <= cardvalue[last.Value] {
+		if i > 0 && cardvalue[cards[i].Value] != cardvalue[last.Value]+1 {
 			return false
 		}
+		last = cards[i]
 	}
 	return true
 }

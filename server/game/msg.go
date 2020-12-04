@@ -1,6 +1,6 @@
 package game
 
 type Msg struct {
-	Cmd  string
-	Data string
+	Cmd  string `json:"cmd"`
+	Data string `json:"data"`
 }

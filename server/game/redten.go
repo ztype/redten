@@ -64,8 +64,6 @@ func (s *Redten) NewPlayer(conn *ws.Conn, info *UserInfo) {
 	log.Println("online", len(s.players))
 	p.OnClose(s.OnPlayerClose)
 	s.lock.Unlock()
-	//testing
-	go p.Echo(p.OnMsg())
 }
 
 func (s *Redten) OnPlayerClose(id string) {
