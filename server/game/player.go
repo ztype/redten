@@ -12,6 +12,7 @@ var writeWait = time.Second
 
 type UserInfo struct {
 	Id     string
+	Uid    string
 	Name   string
 	Avatar string
 }
@@ -23,7 +24,8 @@ type Player struct {
 	closecallback []func(string)
 	msgcallback   []func(*Player, *Msg)
 	//
-	Cards []*Card
+	Cards  []*Card
+	RoomId string
 }
 
 func NewPlayer(conn *websocket.Conn, info *UserInfo) *Player {
@@ -74,7 +76,7 @@ func (p *Player) onMsg() {
 	}
 }
 
-func (p *Player) Send(m *Msg) error {
+func (p *Player) SendMsg(m *Msg) error {
 	if err := p.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
 		return err
 	}

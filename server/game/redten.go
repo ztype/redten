@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
@@ -15,7 +16,8 @@ func NewUid() string {
 }
 
 type Redten struct {
-	players []*Player
+	players map[string]*Player
+	rooms   map[string]*Room
 	lock    sync.Mutex
 }
 
@@ -60,18 +62,34 @@ func (s *Redten) getUinfo(id string) (*UserInfo, error) {
 func (s *Redten) NewPlayer(conn *ws.Conn, info *UserInfo) {
 	p := NewPlayer(conn, info)
 	s.lock.Lock()
-	s.players = append(s.players, p)
-	log.Println("online", len(s.players))
-	p.OnClose(s.OnPlayerClose)
+	s.players[p.Id()] = p
 	s.lock.Unlock()
+
+	p.OnClose(s.OnPlayerClose)
+	p.OnMsg(s.OnMsg)
+	log.Println("online", len(s.players))
+
 }
 
 func (s *Redten) OnPlayerClose(id string) {
-	for i, p := range s.players {
+	for _, p := range s.players {
 		if p.Id() == id {
 			s.lock.Lock()
-			s.players = append(s.players[:i], s.players[i+1:]...)
+			delete(s.players, id)
 			s.lock.Unlock()
 		}
 	}
+}
+
+func (s *Redten) OnMsg(p *Player, m *Msg) {
+	switch m.Cmd {
+	case "create_room":
+		_ = p.SendMsg(s.CreateRoom(p))
+	}
+}
+
+func (s *Redten) CreateRoom(p *Player) *Msg {
+	r := NewRoom(p)
+	data, _ := json.Marshal(map[string]string{"msg": "ok", "room_id": r.ID()})
+	return &Msg{Cmd: "notify", Data: string(data)}
 }

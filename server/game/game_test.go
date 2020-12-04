@@ -14,3 +14,10 @@ func Test_card(t *testing.T) {
 	log.Println("after")
 	log.Println(cs)
 }
+
+func Test_roomId(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		id := NewRoomId()
+		log.Println(id)
+	}
+}
