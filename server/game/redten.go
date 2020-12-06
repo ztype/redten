@@ -1,13 +1,13 @@
 package game
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
 
 	ws "github.com/gorilla/websocket"
 	uuid "github.com/satori/go.uuid"
+	"github.com/tidwall/gjson"
 )
 
 func NewUid() string {
@@ -22,7 +22,10 @@ type Redten struct {
 }
 
 func NewRedten() *Redten {
-	return &Redten{lock: sync.Mutex{}}
+	r := &Redten{lock: sync.Mutex{}}
+	r.players = make(map[string]*Player)
+	r.rooms = make(map[string]*Room)
+	return r
 }
 
 func (s *Redten) ServeWs(w http.ResponseWriter, r *http.Request) {
@@ -59,37 +62,77 @@ func (s *Redten) getUinfo(id string) (*UserInfo, error) {
 	return &UserInfo{Id: id}, nil
 }
 
+//user connect
+//when a player connect:
+//1.check if this is reconnect
 func (s *Redten) NewPlayer(conn *ws.Conn, info *UserInfo) {
+	//first check whether user is reconnect
+	if p, ok := s.players[info.Id]; ok {
+		p.Renew(conn, nil)
+		if p.RoomId != "" {
+			if r, ok := s.rooms[p.RoomId]; ok {
+				msg := r.Join(p)
+				_ = p.SendMsg(msg)
+			}
+		}
+		return
+	}
+	//if user not exit,create it
 	p := NewPlayer(conn, info)
 	s.lock.Lock()
 	s.players[p.Id()] = p
 	s.lock.Unlock()
 
-	p.OnClose(s.OnPlayerClose)
-	p.OnMsg(s.OnMsg)
+	p.OnClose("redten", s.OnPlayerClose)
+	p.OnMsg("redten", s.OnMsg)
 	log.Println("online", len(s.players))
-
+	msg := NewMsg("notify").Set("msg", "ok").Set("id", p.Id())
+	_ = p.Send(msg.JsonBytes())
 }
 
+//
 func (s *Redten) OnPlayerClose(id string) {
-	for _, p := range s.players {
-		if p.Id() == id {
-			s.lock.Lock()
-			delete(s.players, id)
-			s.lock.Unlock()
-		}
-	}
+	log.Println("redten", id, "offline")
 }
 
 func (s *Redten) OnMsg(p *Player, m *Msg) {
+	log.Println("redten", m.Cmd, string(m.Data))
 	switch m.Cmd {
 	case "create_room":
-		_ = p.SendMsg(s.CreateRoom(p))
+		msg := s.CreateRoom(p)
+		_ = p.SendMsg(msg)
+	case "join_room":
+		msg := s.JoinRoom(p, m)
+		_ = p.SendMsg(msg)
+	case "leave_room":
+		log.Println("redten", "leave_room")
+		if r, ok := s.rooms[p.RoomId]; ok {
+			r.Leave(p)
+		}
+	case "ping":
+		_ = p.Send([]byte("pong"))
 	}
 }
 
 func (s *Redten) CreateRoom(p *Player) *Msg {
+	if p.RoomId != "" {
+		return NewMsg("notify").Set("msg", "already in a room").
+			Set("room_id", p.RoomId)
+	}
 	r := NewRoom(p)
-	data, _ := json.Marshal(map[string]string{"msg": "ok", "room_id": r.ID()})
-	return &Msg{Cmd: "notify", Data: string(data)}
+	s.rooms[r.ID()] = r
+	return NewMsg("notify").Set("msg", "ok").Set("room_id", r.ID())
+}
+
+func (s *Redten) JoinRoom(p *Player, m *Msg) *Msg {
+	if p.RoomId != "" {
+		return NewMsg("notify").Set("msg", "already in a room").
+			Set("room_id", p.RoomId)
+	}
+	id := gjson.Get(string(m.Data), "room_id").Str
+	if room, ok := s.rooms[id]; ok {
+		log.Println(p.Id(), "joined", id)
+		return room.Join(p)
+	}
+	return NewMsg("notify").Set("msg", "room not found")
 }

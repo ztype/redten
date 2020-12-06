@@ -19,9 +19,10 @@ func home(dir string) func(w http.ResponseWriter, r *http.Request) {
 			if c, err := r.Cookie("id"); err != nil {
 				uid := game.NewUid()
 				http.SetCookie(w, &http.Cookie{Name: "id", Value: uid})
-				log.Println("new id:", uid, ",from:", r.RemoteAddr)
+				//log.Println("new id:", uid, ",from:", r.RemoteAddr)
 			} else {
-				log.Println("get id:", c.Value, ",from:", r.RemoteAddr)
+				_ = c
+				//log.Println("get id:", c.Value, ",from:", r.RemoteAddr)
 			}
 			http.ServeFile(w, r, filepath.Join(dir, "./index.html"))
 			return
