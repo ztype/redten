@@ -14,14 +14,14 @@ const (
 	RoomPlaying
 	RoomFinished
 )
-const playersNum = 4
+const playersNum = 2
 
 const defaultBase = 10
 const defaultRate = 10
 
 type Room struct {
 	id      string
-	players map[string]*Player
+	players []*Player
 	lock    sync.Mutex
 	owner   *Player
 	//
@@ -46,7 +46,7 @@ func NewRoom(owner *Player) *Room {
 	r.base = defaultBase
 	r.rate = defaultRate
 	r.lock = sync.Mutex{}
-	r.players = make(map[string]*Player)
+	r.players = make([]*Player, 0)
 	r.owner = owner
 	r.Join(owner)
 	return r
@@ -57,34 +57,44 @@ func (r *Room) ID() string {
 }
 
 func (r *Room) Join(p *Player) *Msg {
-	if len(r.players) == 4 {
+	//1.check whether room is full already
+	if len(r.players) == playersNum {
 		return NewMsg("notify").Set("msg", "room is full")
 	}
+	//2.join room
 	r.lock.Lock()
 	p.RoomId = r.ID()
-	r.players[p.Id()] = p
+	r.players = append(r.players, p)
 	r.lock.Unlock()
 	p.OnMsg("room", r.OnMsg)
-	//if player is sufficient,start the game
+	//3.start the game,if player is sufficient
 	if len(r.players) == playersNum {
+		r.Broadcast(nil, NewMsg("game_start"))
 		time.AfterFunc(time.Second, r.DealCards)
 	}
-	return NewMsg("notify").Set("msg", "ok").Set("room_id", r.ID())
+	//4.when a new player joins room,notify other players
+	idx := len(r.players) - 1
+	r.Broadcast(p, NewMsg("join_room").
+		Set("id", p.Id()).Set("seat_index", idx))
+	return NewMsg("notify").Set("msg", "ok").
+		Set("room_id", r.ID()).
+		Set("seat_index", idx)
 }
 
 func (r *Room) Leave(p *Player) {
 	r.lock.Lock()
 	p.LeaveRoom()
-	delete(r.players, p.Id())
+	r.players = []*Player{}
 	r.lock.Unlock()
+	r.Broadcast(p, NewMsg("leave_room").Set("id", p.Id()))
 }
 
 //
 func (r *Room) Dismiss() {
-	for id, p := range r.players {
+	for _, p := range r.players {
 		p.LeaveRoom()
-		delete(r.players, id)
 	}
+	r.players = []*Player{}
 }
 
 func (r *Room) OnMsg(p *Player, m *Msg) {
@@ -109,11 +119,14 @@ func (r *Room) Broadcast(p *Player, m *Msg) {
 			offline = append(offline, pp.Id())
 		}
 	}
+	if len(offline) > 0 {
+		m.Set("offlines", offline)
+	}
 	for _, pp := range r.players {
 		if p != nil && pp.Id() == p.Id() {
 			continue
 		}
-		_ = pp.SendMsg(m.Set("offlines", offline))
+		_ = pp.SendMsg(m)
 	}
 }
 

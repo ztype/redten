@@ -7,14 +7,24 @@
         window.onload = function () {
             var conn;
             var msg = document.getElementById("msg");
-            var log = document.getElementById("log");
+            
 
             function appendLog(item) {
-                var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
+                var log = document.getElementById("log");
                 log.appendChild(item);
-                if (doScroll) {
+
+                let doScroll = log.scrollTop < log.scrollHeight - log.clientHeight;
+                console.log("scrollTop",log.scrollTop," scroolHeight",log.scrollHeight,
+                " clientHeight",log.clientHeight,doScroll);
+                if (doScroll) { 
                     log.scrollTop = log.scrollHeight - log.clientHeight;
                 }
+            }
+
+            function appendStr(str){
+                let item = document.createElement("div");
+                item.innerText = str;
+                appendLog(item);
             }
 
             document.getElementById("form").onsubmit = function () {
@@ -26,12 +36,46 @@
                 }
                 conn.send(msg.value);
                 let item = document.createElement("div");
-                item.innerHTML = "> " + msg.value;
+                item.innerText = "> " + msg.value;
                 appendLog(item);
                 msg.value = "";
                 return false;
             };
-
+            document.getElementById("create_room").onclick = function () {
+                if (!conn)
+                    return false;
+                let msg = {
+                    cmd:"create_room"
+                }
+                let str = JSON.stringify(msg);
+                conn.send(str);
+                appendStr("> "+str);
+            };
+            document.getElementById("join_room").onclick = function(){
+                if (!conn)
+                    return false;
+                let rid = document.getElementById("join_room_id").value
+                if (!rid)
+                    return false;
+                let msg = {
+                    cmd:"join_room",
+                    data:{
+                        room_id:rid
+                    }
+                }
+                let str = JSON.stringify(msg)
+                conn.send(str)
+                appendStr("> "+str)
+            };
+            document.getElementById("leave_room").onclick = function(){
+                if (!conn){
+                    return false
+                }
+                let msg = {cmd:"leave_room"}
+                let str = JSON.stringify(msg)
+                conn.send(str)
+                appendStr("> "+str)
+            };
             if (window["WebSocket"]) {
                 conn = new WebSocket("ws://" + document.location.host + "/ws");
                 conn.onclose = function (evt) {
@@ -94,15 +138,16 @@
     <div id="log"></div>
     <div>
         <form id="form">
-            <input type="submit" value="Send" />
+            <input type="button" value="Send" />
             <input type="text" id="msg" size="64" autofocus />
         </form>
     </div>
     <div>
         <form id="room">
-            <input id="create_room" type="submit" value="create room" />
-            <input id="join_room" type="submit" value="join room" />
-            <input type="text" id="join_room_id" size="64" />
+            <input id="create_room" type="button" value="create room" />
+            <input id="join_room" type="button" value="join room" />
+            <input id="join_room_id" type="text" size="64" />
+            <input id="leave_room" type="button" value="leave room"/>
         </form>
     </div>
 </body>

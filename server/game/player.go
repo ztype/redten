@@ -3,6 +3,7 @@ package game
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -82,8 +83,12 @@ func (p *Player) OnClose(name string, f func(string)) {
 // websocket disconnect callback
 func (p *Player) onClose(code int, text string) error {
 	//log.Println("close:", p.conn.RemoteAddr().String(), "exit")
+	if code == websocket.CloseGoingAway {
+		return nil
+	}
 	p.online = false
 	for _, callback := range p.closecallback {
+		log.Println("player", "close", code, text)
 		callback(p.Id())
 	}
 	return nil
@@ -97,10 +102,10 @@ func (p *Player) onMsg() {
 			// called by websocket lib automatically
 			return
 		}
-		msg := Msg{}
-		_ = json.Unmarshal(data, &msg)
+		msg := NewMsg("")
+		_ = json.Unmarshal(data, msg)
 		for _, callback := range p.msgcallback {
-			callback(p, &msg)
+			callback(p, msg)
 		}
 	}
 }

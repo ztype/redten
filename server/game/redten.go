@@ -72,9 +72,14 @@ func (s *Redten) NewPlayer(conn *ws.Conn, info *UserInfo) {
 		if p.RoomId != "" {
 			if r, ok := s.rooms[p.RoomId]; ok {
 				msg := r.Join(p)
+				msg.Set("id", info.Id)
 				_ = p.SendMsg(msg)
+				return
 			}
+			p.LeaveRoom()
 		}
+		msg := NewMsg("nofity").Set("id", p.Id())
+		_ = p.SendMsg(msg)
 		return
 	}
 	//if user not exit,create it

@@ -22,7 +22,7 @@ func Test_card(t *testing.T) {
 	log.Println("after sort")
 	log.Println(cs)
 
-	sets := CutCards(cc, 4)
+	sets := CutCards(cc, 2)
 	log.Println("cut&sort")
 	for i, set := range sets {
 		SortCards(set)
